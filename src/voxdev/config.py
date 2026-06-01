@@ -8,10 +8,11 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # ── Voz ──
-VOICE_LANGUAGE = os.getenv("VOICE_LANGUAGE", "Portuguese")
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
+VOICE_LANGUAGE = os.getenv("VOICE_LANGUAGE", "pt")
 VOICE_SAMPLE_RATE = os.getenv("VOICE_SAMPLE_RATE", "44100")
+
+# ── OpenAI Whisper API ──
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # ── TTS ──
 TTS_ENABLED = os.getenv("TTS_ENABLED", "true").lower() == "true"

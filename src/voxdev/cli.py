@@ -4,6 +4,7 @@ import subprocess
 import os
 import time
 import struct
+import platform
 from pathlib import Path
 from .core import VoiceManager
 from .config import VAULT_INBOX_PATH
@@ -25,8 +26,15 @@ def main():
     audio_path = f"/tmp/santos_voice_{TIMESTAMP}.wav"
     raw_path = audio_path + ".raw"
     
-    # Comando arecord enviando para stdout para análise
-    cmd = ["arecord", "-f", "cd", "-r", str(vm.sample_rate), "-t", "raw"]
+    # Gravação cross-platform: ffmpeg no Mac, arecord no Linux
+    if platform.system() == "Darwin":
+        cmd = [
+            "ffmpeg", "-f", "avfoundation", "-i", ":0",
+            "-ar", str(vm.sample_rate), "-ac", "2", "-f", "s16le", "pipe:1",
+            "-loglevel", "quiet"
+        ]
+    else:
+        cmd = ["arecord", "-f", "cd", "-r", str(vm.sample_rate), "-t", "raw"]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     
     silence_start = None
@@ -91,9 +99,9 @@ def main():
             # Salvar no Inbox do Vault
             vault_inbox = Path(VAULT_INBOX_PATH)
             os.makedirs(vault_inbox, exist_ok=True)
-            vault_file = vault_inbox / f"transcricao-{TIMESTAMP}.md"
+            vault_file = vault_inbox / f"resposta-voz-{TIMESTAMP}.md"
             with open(vault_file, "w", encoding="utf-8") as f_vault:
-                f_vault.write(f"# Transcrição — {TIMESTAMP}\n\n{text}\n")
+                f_vault.write(f"# Resposta — {TIMESTAMP}\n\n{text}\n")
             print(f"✅ Transcrição salva no vault: {vault_file}")
         else:
             print("❌ Não foi possível transcrever nada.")

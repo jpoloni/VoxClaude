@@ -7,12 +7,11 @@ from typing import Optional
 
 from .config import (
     VOICE_LANGUAGE,
-    WHISPER_MODEL,
-    WHISPER_DEVICE,
     VOICE_SAMPLE_RATE,
     TTS_ENABLED,
     PIPER_PATH,
     PIPER_MODEL,
+    OPENAI_API_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,8 +21,6 @@ class VoiceManager:
 
     def __init__(self):
         self.language = VOICE_LANGUAGE
-        self.model = WHISPER_MODEL
-        self.device = WHISPER_DEVICE
         self.sample_rate = VOICE_SAMPLE_RATE
         self.tts_enabled = TTS_ENABLED
         self.piper_path = PIPER_PATH
@@ -78,14 +75,15 @@ class VoiceManager:
             
             subprocess.run(cmd_piper, input=clean_text.encode("utf-8"), check=True, capture_output=True)
             
-            # [NOVO] Reprodução interrompível
             if os.path.exists(wav_path):
                 import select
                 import termios
                 import tty
                 import sys
+                import platform
 
-                play_proc = subprocess.Popen(["aplay", wav_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                player = "afplay" if platform.system() == "Darwin" else "aplay"
+                play_proc = subprocess.Popen([player, wav_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
                 # Prepara stdin para leitura "raw" (sem precisar de Enter)
                 fd = sys.stdin.fileno()
@@ -157,58 +155,31 @@ class VoiceManager:
         return path
 
     def transcribe(self, audio_path: str) -> str:
-        """
-        Transcribe the given audio file using Whisper.
-        Returns the transcribed text.
-        """
+        """Transcribe audio file via OpenAI Whisper API."""
+        import httpx
+
         if not os.path.exists(audio_path):
             return "Erro: Arquivo de áudio não encontrado."
 
-        logger.info(f"📝 Transcrevendo {audio_path}...")
-        
-        # Try primary device (e.g. cuda)
-        text = self._run_whisper(audio_path, self.device)
-        
-        # Fallback to CPU if primary failed or returned empty (common with CUDA OOM)
-        if not text and self.device != "cpu":
-            logger.warning("⚠️ Transcrição falhou ou retornou vazia. Tentando fallback para CPU...")
-            text = self._run_whisper(audio_path, "cpu")
-            
-        return text.strip()
+        if not OPENAI_API_KEY:
+            logger.error("OPENAI_API_KEY não configurada.")
+            return ""
 
-    def _run_whisper(self, audio_path: str, device: str) -> str:
-        """Internal helper to run the whisper command."""
-        cmd = [
-            "whisper",
-            audio_path,
-            "--language", self.language,
-            "--model", self.model,
-            "--device", device,
-            "--output_format", "txt",
-            "--verbose", "False"
-        ]
-        
+        logger.info(f"📝 Transcrevendo via OpenAI Whisper API...")
+
         try:
-            # whisper command creates a .txt file in the same directory as the audio
-            # we need to capture that or read it.
-            # Actually, whisper prints the result if verbose is True, 
-            # but we'll use the generated txt file for reliability.
-            
-            output_dir = os.path.dirname(audio_path)
-            subprocess.run(cmd, cwd=output_dir, check=True, capture_output=True)
-            
-            txt_path = audio_path.replace(".wav", ".txt")
-            if os.path.exists(txt_path):
-                with open(txt_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                os.remove(txt_path)
-                return content
-            return ""
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Erro ao executar Whisper ({device}): {e.stderr.decode()}")
-            return ""
+            with open(audio_path, "rb") as f:
+                response = httpx.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                    data={"model": "whisper-1", "language": self.language},
+                    files={"file": (os.path.basename(audio_path), f, "audio/wav")},
+                    timeout=60,
+                )
+            response.raise_for_status()
+            return response.json().get("text", "").strip()
         except Exception as e:
-            logger.error(f"Erro inesperado na transcrição: {e}")
+            logger.error(f"Erro na transcrição Whisper API: {e}")
             return ""
 
     def cleanup(self, path: str):

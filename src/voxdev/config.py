@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 # ── Voz ──
 VOICE_LANGUAGE = os.getenv("VOICE_LANGUAGE", "pt")
@@ -28,3 +28,6 @@ PIPER_MODEL = os.getenv("PIPER_MODEL", str(VOXDEV_ROOT / "models" / "pt_BR-faber
 # Por padrão, assume que o Vault está um nível acima da pasta VoxDev
 DEFAULT_VAULT_PATH = VOXDEV_ROOT.parent / "vault" / "00-Inbox"
 VAULT_INBOX_PATH = os.getenv("VAULT_INBOX_PATH", str(DEFAULT_VAULT_PATH))
+
+# Pasta de backup de áudio — gravações nunca são perdidas
+AUDIO_BACKUP_PATH = os.getenv("AUDIO_BACKUP_PATH", str(VOXDEV_ROOT / "audio-backup"))
